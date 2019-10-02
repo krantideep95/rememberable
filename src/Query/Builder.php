@@ -56,6 +56,30 @@ class Builder extends \Illuminate\Database\Query\Builder
         return parent::get($columns);
     }
 
+    public function pluck($column, $key = null)
+    {
+        if ( ! is_null($this->cacheSeconds)) {
+            return $this->pluckCached($column, $key);
+        }
+
+        return parent::pluck($column, $key);
+    }
+
+    public function pluckCached($column, $key = null)
+    {
+        list($key, $seconds) = $this->getCacheInfo();
+
+        $cache = $this->getCache();
+
+        $callback = $this->pluckCacheCallback($column);
+
+        if ($seconds instanceof DateTime || $seconds > 0) {
+            return $cache->remember($key, $seconds, $callback);
+        }
+
+        return $cache->rememberForever($key, $callback);
+    }
+
     /**
      * Execute the query as a cached "select" statement.
      *
@@ -85,6 +109,15 @@ class Builder extends \Illuminate\Database\Query\Builder
         }
 
         return $cache->rememberForever($key, $callback);
+    }
+
+    protected function pluckCacheCallback($column, $key = null)
+    {
+        return function () use ($column, $key) {
+            $this->cacheSeconds = null;
+
+            return $this->pluck($column, $key);
+        };
     }
 
     /**
